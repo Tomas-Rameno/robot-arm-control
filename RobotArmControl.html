@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RobotArm · ovládání</title>
+<style>
+  :root {
+    --bg: #16181c;
+    --panel: #1e2126;
+    --panel-raised: #262a30;
+    --border: #34393f;
+    --accent: #e8a33d;
+    --accent-soft: rgba(232,163,61,0.14);
+    --ok: #5fb87d;
+    --err: #d1495b;
+    --text: #ece9e4;
+    --text-muted: #8b8f96;
+    --text-faint: #565a60;
+    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', Consolas, monospace;
+    --font-body: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    min-height: 100vh;
+    padding: 20px 14px 40px;
+    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.035) 1px, transparent 0);
+    background-size: 22px 22px;
+    display: flex;
+    justify-content: center;
+  }
+  .frame {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 30px 20px 20px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+  }
+  .screw {
+    position: absolute;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #4a4f56, #16181b 70%);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.5);
+  }
+  .screw.tl { top: 11px; left: 11px; }
+  .screw.tr { top: 11px; right: 11px; }
+  .screw.bl { bottom: 11px; left: 11px; }
+  .screw.br { bottom: 11px; right: 11px; }
+
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .head-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-size: 26px;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 12px 6px 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+  .led {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--err);
+    box-shadow: 0 0 6px 1px rgba(209,73,91,0.55);
+    transition: background 0.25s, box-shadow 0.25s;
+    flex-shrink: 0;
+  }
+  .led.connected {
+    background: var(--ok);
+    box-shadow: 0 0 8px 2px rgba(95,184,125,0.65);
+  }
+
+  .notice {
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    margin-bottom: 18px;
+  }
+  .notice.warn {
+    background: rgba(209,73,91,0.14);
+    border-left-color: var(--err);
+    color: #e7b3ba;
+  }
+
+  button {
+    font-family: var(--font-body);
+    border: none;
+    cursor: pointer;
+  }
+  button:disabled { cursor: not-allowed; }
+  button:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .connect-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #1a1305;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    margin-bottom: 22px;
+    transition: filter 0.15s, opacity 0.15s;
+  }
+  .connect-btn:hover { filter: brightness(1.08); }
+  .connect-btn:disabled { opacity: 0.6; }
+  .connect-btn.disconnect {
+    background: var(--panel-raised);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .channels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .channel {
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px 14px;
+  }
+  .channel-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .ch-code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: #1a1305;
+    background: var(--accent);
+    border-radius: 4px;
+    width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .ch-labels { flex: 1; min-width: 0; }
+  .ch-name {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .ch-sub {
+    display: block;
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 1px;
+  }
+  .ch-value {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .fader {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--fill, 50%), var(--border) var(--fill, 50%), var(--border) 100%);
+    outline: none;
+    margin: 14px 0 4px;
+  }
+  .fader::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 30px;
+    border-radius: 5px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.25), transparent 40%), var(--accent);
+    border: 1px solid rgba(0,0,0,0.35);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    cursor: pointer;
+  }
+  .fader::-moz-range-thumb {
+    width: 20px;
+    height: 30px;
+    border-radius: 5px;
+    background: var(--accent);
+    border: 1px solid rgba(0,0,0,0.35);
+    cursor: pointer;
+  }
+  .fader:disabled { opacity: 0.4; }
+  .fader:disabled::-webkit-slider-thumb { background: var(--text-faint); cursor: not-allowed; }
+  .fader:disabled::-moz-range-thumb { background: var(--text-faint); cursor: not-allowed; }
+
+  .ticks {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-faint);
+  }
+
+  .home-btn {
+    width: 100%;
+    padding: 13px;
+    border-radius: 8px;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin-bottom: 18px;
+    transition: border-color 0.15s;
+  }
+  .home-btn:disabled { opacity: 0.4; }
+  .home-btn:not(:disabled):hover { border-color: var(--accent); }
+
+  .log-panel {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .log-head {
+    background: var(--panel-raised);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--text-faint);
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .log {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+    padding: 10px 12px;
+    max-height: 120px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .log div:first-child { color: var(--text); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <span class="screw tl"></span>
+    <span class="screw tr"></span>
+    <span class="screw bl"></span>
+    <span class="screw br"></span>
+
+    <div class="eyebrow">ROBOTIC ARM · BLE CONTROL SURFACE</div>
+    <div class="head-row">
+      <h1>RobotArm</h1>
+      <div class="status-pill">
+        <span class="led" id="statusLed"></span>
+        <span id="statusText">ODPOJENO</span>
+      </div>
+    </div>
+
+    <div class="notice" id="supportNotice">
+      Tahle stránka mluví s ramenem přes <strong>Web Bluetooth</strong> – funguje jen v Chrome nebo Edge (počítač i Android), ne v Safari na iPhonu. Pokud se díváš v náhledu uvnitř Claude chatu, stáhni si soubor a otevři ho přímo v prohlížeči – uvnitř chatu má stránka Bluetooth zablokovaný.
+    </div>
+
+    <button id="connectBtn" class="connect-btn">PŘIPOJIT</button>
+
+    <div class="channels" id="channels"></div>
+
+    <button id="homeBtn" class="home-btn" disabled>⌂ HOME – výchozí pozice</button>
+
+    <div class="log-panel">
+      <div class="log-head">ZÁZNAM SPOJENÍ</div>
+      <div class="log" id="log"><div>Čekám na připojení…</div></div>
+    </div>
+  </div>
+
+<script>
+  const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+  const RX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+  const TX_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+  const JOINTS = [
+    { code: 'B', name: 'BASE',       sub: 'základna',       servo: 'MG996', min: 0, max: 180, home: 90 },
+    { code: 'S', name: 'SHOULDER',   sub: 'rameno',          servo: 'MG996', min: 0, max: 180, home: 90 },
+    { code: 'E', name: 'ELBOW',      sub: 'loket',           servo: 'MG996', min: 0, max: 180, home: 90 },
+    { code: 'R', name: 'WRIST ROT',  sub: 'zápěstí rotace',  servo: 'MG996', min: 0, max: 180, home: 90 },
+    { code: 'W', name: 'WRIST TILT', sub: 'zápěstí náklon',  servo: 'SG90',  min: 0, max: 180, home: 90 },
+    { code: 'G', name: 'GRIPPER',    sub: 'drapák',          servo: 'SG90',  min: 0, max: 90,  home: 30 },
+  ];
+
+  let bleDevice = null, rxChar = null, txChar = null;
+  let notifyBuffer = '';
+  const lastSentAt = {}, pendingValue = {}, throttleTimers = {};
+  const THROTTLE_MS = 60;
+
+  const channelsEl = document.getElementById('channels');
+  const connectBtn = document.getElementById('connectBtn');
+  const homeBtn = document.getElementById('homeBtn');
+  const statusLed = document.getElementById('statusLed');
+  const statusText = document.getElementById('statusText');
+  const logEl = document.getElementById('log');
+  const supportNotice = document.getElementById('supportNotice');
+
+  function buildChannels() {
+    channelsEl.innerHTML = '';
+    JOINTS.forEach(joint => {
+      const card = document.createElement('div');
+      card.className = 'channel';
+      card.innerHTML = `
+        <div class="channel-head">
+          <span class="ch-code">${joint.code}</span>
+          <div class="ch-labels">
+            <span class="ch-name">${joint.name}</span>
+            <span class="ch-sub">${joint.sub} · ${joint.servo}</span>
+          </div>
+          <span class="ch-value" id="val-${joint.code}">${String(joint.home).padStart(3,'0')}°</span>
+        </div>
+        <input type="range" min="${joint.min}" max="${joint.max}" value="${joint.home}"
+               class="fader" id="slider-${joint.code}" disabled>
+        <div class="ticks"><span>${joint.min}</span><span>${Math.round((joint.min+joint.max)/2)}</span><span>${joint.max}</span></div>
+      `;
+      channelsEl.appendChild(card);
+    });
+
+    JOINTS.forEach(joint => {
+      const slider = document.getElementById(`slider-${joint.code}`);
+      const valEl = document.getElementById(`val-${joint.code}`);
+      const pct = ((joint.home - joint.min) / (joint.max - joint.min)) * 100;
+      slider.style.setProperty('--fill', pct + '%');
+      slider.addEventListener('input', () => {
+        const v = Number(slider.value);
+        const p = ((v - joint.min) / (joint.max - joint.min)) * 100;
+        slider.style.setProperty('--fill', p + '%');
+        valEl.textContent = String(v).padStart(3,'0') + '°';
+        queueSend(joint.code, v);
+      });
+    });
+  }
+
+  function queueSend(code, value) {
+    pendingValue[code] = value;
+    const now = performance.now();
+    const last = lastSentAt[code] || 0;
+    if (now - last >= THROTTLE_MS) {
+      flushSend(code);
+    } else if (!throttleTimers[code]) {
+      throttleTimers[code] = setTimeout(() => flushSend(code), THROTTLE_MS - (now - last));
+    }
+  }
+  function flushSend(code) {
+    clearTimeout(throttleTimers[code]);
+    throttleTimers[code] = null;
+    lastSentAt[code] = performance.now();
+    sendCommand(code + pendingValue[code]);
+  }
+
+  async function sendCommand(text) {
+    if (!rxChar) return;
+    try {
+      await rxChar.writeValue(new TextEncoder().encode(text + '\n'));
+    } catch (e) {
+      log('Chyba zápisu: ' + e.message);
+    }
+  }
+
+  function log(msg) {
+    const line = document.createElement('div');
+    line.textContent = msg;
+    logEl.prepend(line);
+    while (logEl.children.length > 6) logEl.removeChild(logEl.lastChild);
+  }
+
+  function handleNotify(event) {
+    const chunk = new TextDecoder().decode(event.target.value);
+    notifyBuffer += chunk;
+    let idx;
+    while ((idx = notifyBuffer.indexOf('\n')) >= 0) {
+      const line = notifyBuffer.slice(0, idx).trim();
+      notifyBuffer = notifyBuffer.slice(idx + 1);
+      if (!line) continue;
+      if (line.startsWith('STATUS ')) applyStatus(line.slice(7));
+      log('« ' + line);
+    }
+  }
+
+  function applyStatus(statusStr) {
+    statusStr.split(',').forEach(pair => {
+      const code = pair.charAt(0);
+      const val = parseInt(pair.slice(1), 10);
+      if (isNaN(val)) return;
+      const slider = document.getElementById(`slider-${code}`);
+      const valEl = document.getElementById(`val-${code}`);
+      const joint = JOINTS.find(j => j.code === code);
+      if (slider && joint) {
+        slider.value = val;
+        valEl.textContent = String(val).padStart(3,'0') + '°';
+        slider.style.setProperty('--fill', ((val - joint.min) / (joint.max - joint.min)) * 100 + '%');
+      }
+    });
+  }
+
+  async function connect() {
+    if (!navigator.bluetooth) {
+      log('Tenhle prohlížeč nepodporuje Web Bluetooth.');
+      return;
+    }
+    try {
+      connectBtn.textContent = 'PŘIPOJUJI…';
+      connectBtn.disabled = true;
+      bleDevice = await navigator.bluetooth.requestDevice({
+        filters: [{ name: 'RobotArm' }],
+        optionalServices: [SERVICE_UUID]
+      });
+      bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+      const server = await bleDevice.gatt.connect();
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      rxChar = await service.getCharacteristic(RX_UUID);
+      txChar = await service.getCharacteristic(TX_UUID);
+      await txChar.startNotifications();
+      txChar.addEventListener('characteristicvaluechanged', handleNotify);
+      onConnected();
+    } catch (e) {
+      log('Připojení selhalo: ' + e.message);
+      connectBtn.textContent = 'PŘIPOJIT';
+      connectBtn.disabled = false;
+    }
+  }
+
+  function onConnected() {
+    statusLed.classList.add('connected');
+    statusText.textContent = 'PŘIPOJENO';
+    connectBtn.textContent = 'ODPOJIT';
+    connectBtn.classList.add('disconnect');
+    connectBtn.disabled = false;
+    document.querySelectorAll('.fader').forEach(s => s.disabled = false);
+    homeBtn.disabled = false;
+    log('Připojeno k RobotArm');
+    setTimeout(() => sendCommand('?'), 300);
+  }
+
+  function onDisconnected() {
+    statusLed.classList.remove('connected');
+    statusText.textContent = 'ODPOJENO';
+    connectBtn.textContent = 'PŘIPOJIT';
+    connectBtn.classList.remove('disconnect');
+    connectBtn.disabled = false;
+    document.querySelectorAll('.fader').forEach(s => s.disabled = true);
+    homeBtn.disabled = true;
+    rxChar = null; txChar = null;
+    log('Odpojeno');
+  }
+
+  connectBtn.addEventListener('click', () => {
+    if (bleDevice && bleDevice.gatt.connected) {
+      bleDevice.gatt.disconnect();
+    } else {
+      connect();
+    }
+  });
+
+  homeBtn.addEventListener('click', () => {
+    sendCommand('H');
+    JOINTS.forEach(joint => {
+      const slider = document.getElementById(`slider-${joint.code}`);
+      const valEl = document.getElementById(`val-${joint.code}`);
+      slider.value = joint.home;
+      valEl.textContent = String(joint.home).padStart(3,'0') + '°';
+      slider.style.setProperty('--fill', ((joint.home - joint.min) / (joint.max - joint.min)) * 100 + '%');
+    });
+  });
+
+  if (!navigator.bluetooth) {
+    supportNotice.classList.add('warn');
+    supportNotice.innerHTML = '<strong>Web Bluetooth tu není dostupný.</strong> Otevři tuhle stránku v Chrome nebo Edge (na iPhonu/Safari Web Bluetooth bohužel nefunguje vůbec).';
+  }
+
+  buildChannels();
+</script>
+</body>
+</html>
